@@ -12,7 +12,8 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Hello World!" />
+        android:text="Connect Bluetooth Device"
+        android:id="@+id/textView" />
 
     <Button
         android:layout_width="wrap_content"
@@ -21,4 +22,58 @@
         android:id="@+id/button_panic"
         android:layout_alignParentBottom="true"
         android:layout_centerHorizontal="true" />
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Enable Bluetooth"
+        android:id="@+id/enable_bluetooth_button"
+        android:layout_below="@+id/textView"
+        android:layout_alignParentStart="true" />
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Scan"
+        android:id="@+id/scan_button"
+        android:layout_below="@+id/enable_bluetooth_button"
+        android:layout_alignParentStart="true" />
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Connect"
+        android:id="@+id/connect_button"
+        android:layout_below="@+id/scan_button"
+        android:layout_alignParentStart="true" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:id="@+id/scan_status_text"
+        android:layout_alignTop="@+id/enable_bluetooth_button"
+        android:layout_alignBottom="@+id/enable_bluetooth_button"
+        android:layout_alignParentEnd="true"
+        android:layout_toEndOf="@+id/enable_bluetooth_button" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:id="@+id/device_info_text"
+        android:layout_below="@+id/enable_bluetooth_button"
+        android:layout_above="@+id/connect_button"
+        android:layout_alignEnd="@+id/scan_status_text"
+        android:layout_toEndOf="@+id/enable_bluetooth_button" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:id="@+id/connection_status_text"
+        android:layout_below="@+id/device_info_text"
+        android:layout_alignStart="@+id/device_info_text"
+        android:layout_alignBottom="@+id/connect_button"
+        android:layout_alignParentEnd="true" />
 </RelativeLayout>
