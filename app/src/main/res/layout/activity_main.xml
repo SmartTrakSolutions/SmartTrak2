@@ -76,4 +76,23 @@
         android:layout_alignStart="@+id/device_info_text"
         android:layout_alignBottom="@+id/connect_button"
         android:layout_alignParentEnd="true" />
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Import Contact"
+        android:id="@+id/import_button"
+        android:layout_below="@+id/connect_button"
+        android:layout_alignParentStart="true"
+        android:layout_marginTop="84dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="New Text"
+        android:id="@+id/contact_text"
+        android:layout_alignTop="@+id/import_button"
+        android:layout_alignBottom="@+id/import_button"
+        android:layout_alignEnd="@+id/connection_status_text"
+        android:layout_toEndOf="@+id/import_button" />
 </RelativeLayout>
