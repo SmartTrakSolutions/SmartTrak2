@@ -1,6 +1,7 @@
 package com.example.ashton.smarttrak2;
 
 import android.Manifest;
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -14,10 +15,19 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.location.Address;
+import android.location.Criteria;
+import android.location.Geocoder;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Vibrator;
+import android.provider.ContactsContract;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
@@ -28,11 +38,15 @@ import android.telephony.SmsManager;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity implements BluetoothAdapter.LeScanCallback {
@@ -47,9 +61,11 @@ public class MainActivity extends AppCompatActivity implements BluetoothAdapter.
 
     boolean emergency = false;
     boolean quitEmergencyTask = false;
-    String panicMsg = "Panic message!";
     String phoneNumber = "7782287611";
-    int received = 0;
+    double latitude;
+    double longitude;
+
+    static final int PICK_CONTACT = 1;
 
     private boolean scanStarted;
     private boolean scanning;
@@ -65,6 +81,11 @@ public class MainActivity extends AppCompatActivity implements BluetoothAdapter.
     private TextView deviceInfoText;
     private TextView connectionStatusText;
     private Button connectButton;
+
+    String bestProvider;
+    LocationManager locationManager;
+
+
 
     private final BroadcastReceiver bluetoothStateReceiver = new BroadcastReceiver() {
         @Override
@@ -147,12 +168,25 @@ public class MainActivity extends AppCompatActivity implements BluetoothAdapter.
         setContentView(R.layout.activity_main);
         setTitle("SmartTrak");
 
+        TextView tv = (TextView) findViewById(R.id.contact_text);
+        tv.setText(String.format("Emergency Contact:\n%s", phoneNumber));
+
+        MyLocationListener mLocationListener = new MyLocationListener();
+        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        Criteria criteria = new Criteria();
+        bestProvider = locationManager.getBestProvider(criteria, false);
+        locationManager.requestLocationUpdates(bestProvider, 60000, 15, mLocationListener);
+
         new EmergencyTask().execute();
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
         if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(MainActivity.this, new String[] { Manifest.permission.ACCESS_FINE_LOCATION }, 1);
         }
+        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[] { Manifest.permission.ACCESS_COARSE_LOCATION }, 1);
+        }
+
 
         enableBluetoothButton = (Button) findViewById(R.id.enable_bluetooth_button);
         scanStatusText = (TextView) findViewById(R.id.scan_status_text);
@@ -197,9 +231,26 @@ public class MainActivity extends AppCompatActivity implements BluetoothAdapter.
         buttonPanic.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                sendSMS(phoneNumber, panicMsg);
+                sendSMS();
             }
         });
+
+        Button button = (Button)findViewById(R.id.import_button);
+
+        button.setOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View v)
+            {
+                Intent intent = new Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI);
+                startActivityForResult(intent, PICK_CONTACT);
+            }
+        });
+
+
+
+
+
     }
 
     @Override
@@ -252,9 +303,6 @@ public class MainActivity extends AppCompatActivity implements BluetoothAdapter.
         @Override
         protected void onPostExecute(Void result){
 
-            // TEST VALUE
-            final String emergencyMsg = "Emergency message";
-
             Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
 
             AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
@@ -270,7 +318,7 @@ public class MainActivity extends AppCompatActivity implements BluetoothAdapter.
             builder.setNegativeButton("NO", new DialogInterface.OnClickListener(){
                 @Override
                 public void onClick(DialogInterface dialog, int which){
-                    sendSMS(phoneNumber, emergencyMsg);
+                    sendSMS();
                     dialog.dismiss();
                 }
             });
@@ -284,7 +332,7 @@ public class MainActivity extends AppCompatActivity implements BluetoothAdapter.
                 @Override
                 public void run(){
                     if (alert.isShowing()){
-                        sendSMS(phoneNumber, emergencyMsg);
+                        sendSMS();
                         alert.dismiss();
                     }
                 }
@@ -305,9 +353,19 @@ public class MainActivity extends AppCompatActivity implements BluetoothAdapter.
 
     }
 
-    private void sendSMS(String phoneNumber, String message){
+    private void sendSMS(){
+
         int permission = ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS);
         if (permission == PackageManager.PERMISSION_GRANTED){
+            boolean locFound = getLocation();
+            String tempMsg = "Emergency detected!";
+            if (locFound){
+                tempMsg = String.format("%s \nhttp://www.google.com/maps/place/%f,%f/@%f,%f,17z", tempMsg, latitude, longitude, latitude, longitude);
+            } else {
+                tempMsg = tempMsg + "\nNo location data available.";
+            }
+            final String message = tempMsg;
+
             SmsManager sms = SmsManager.getDefault();
             sms.sendTextMessage(phoneNumber, null, message, null, null);
 
@@ -318,7 +376,7 @@ public class MainActivity extends AppCompatActivity implements BluetoothAdapter.
             toast.show();
         } else {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.SEND_SMS}, 1);
-            sendSMS(phoneNumber, message);
+            sendSMS();
         }
 
     }
@@ -388,8 +446,106 @@ public class MainActivity extends AppCompatActivity implements BluetoothAdapter.
         connectionStatusText.setText(connectionText);
         connectButton.setEnabled(bluetoothDevice != null && state == STATE_DISCONNECTED);
 
-        // Send
-//        sendZeroButton.setEnabled(connected);
-//        sendValueButton.setEnabled(connected);
     }
+
+    public boolean getLocation(){
+        boolean result = false;
+
+        // Get the location manager
+//        MyLocationListener mLocationListener = new MyLocationListener();
+//        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+//        Criteria criteria = new Criteria();
+//        String bestProvider = locationManager.getBestProvider(criteria, false);
+//        locationManager.requestLocationUpdates(bestProvider, 1000, 15, mLocationListener);
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+
+            Location location = locationManager.getLastKnownLocation(bestProvider);
+
+            try{
+                latitude = location.getLatitude();
+                longitude = location.getLongitude();
+                result = true;
+            } catch (NullPointerException e){
+                latitude = 0;
+                longitude = 0;
+                result = false;
+            }
+        }
+
+        return result;
+    }
+
+
+    @Override public void onActivityResult(int reqCode, int resultCode, Intent data){
+
+        super.onActivityResult(reqCode, resultCode, data);
+
+        switch(reqCode)
+        {
+            case (PICK_CONTACT):
+                if (resultCode == Activity.RESULT_OK)
+                {
+                    Uri contactData = data.getData();
+                    Cursor c = managedQuery(contactData, null, null, null, null);
+                    if (c.moveToFirst())
+                    {
+                        String id = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts._ID));
+
+                        String hasPhone =
+                                c.getString(c.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER));
+
+                        if (hasPhone.equalsIgnoreCase("1"))
+                        {
+                            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+                                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_CONTACTS}, 1);
+                            }
+
+
+                            Cursor phones = getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null,
+                                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = " + id, null, null);
+                            phones.moveToFirst();
+                            String cNumber = phones.getString(phones.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                            phoneNumber = cNumber;
+
+                            TextView tv = (TextView) findViewById(R.id.contact_text);
+                            tv.setText(String.format("Emergency Contact:\n%s", phoneNumber));
+
+
+                        }
+                    }
+                }
+        }
+    }
+
+    private class MyLocationListener implements LocationListener {
+        @Override
+        public void onLocationChanged(final Location location){
+            if (location != null){
+                latitude = location.getLatitude();
+                longitude = location.getLongitude();
+            }
+        }
+
+        @Override
+        public void onProviderDisabled(String arg0)
+        {
+            // Do something here if you would like to know when the provider is disabled by the user
+        }
+
+        @Override
+        public void onProviderEnabled(String arg0)
+        {
+            // Do something here if you would like to know when the provider is enabled by the user
+        }
+
+        @Override
+        public void onStatusChanged(String arg0, int arg1, Bundle arg2)
+        {
+            // Do something here if you would like to know when the provider status changes
+        }
+    };
+
+
 }
